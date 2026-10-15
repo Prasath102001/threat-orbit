@@ -881,9 +881,11 @@ function clearFx() {
 /* ===================================================================== */
 const view = { off: 0, offTarget: 0, offY: 0, offYTarget: 0, sat: false };
 function idleDistance() {
-  const vHalf = camera.fov / 2 * RAD, hHalf = Math.atan(Math.tan(vHalf) * camera.aspect);
+  const aspect = isFinite(camera.aspect) && camera.aspect > 0 ? camera.aspect : 1;
+  const vHalf = camera.fov / 2 * RAD, hHalf = Math.atan(Math.tan(vHalf) * aspect);
   const ang = Math.min(vHalf, hHalf) * (isNarrow() ? .8 : .6);
-  return 1.18 / Math.sin(ang);
+  const d = 1.18 / Math.sin(ang);
+  return isFinite(d) ? d : 4.5;
 }
 const focusDistance = () => isNarrow() ? idleDistance() * 0.78 : idleDistance() * 0.68;
 let flight = null;
@@ -926,11 +928,15 @@ function placeReticle() {
 /* ===================================================================== */
 /*  Resize + loop                                                        */
 /* ===================================================================== */
+// hidden or minimised windows can briefly report a 0×0 size; never feed that into the camera
+const hasSize = () => innerWidth > 0 && innerHeight > 0;
 function applyViewOffset() {
+  if (!hasSize()) return;
   if (Math.abs(view.off) < .5 && Math.abs(view.offY) < .5) camera.clearViewOffset();
   else camera.setViewOffset(innerWidth, innerHeight, view.off, view.offY, innerWidth, innerHeight);
 }
 function resize() {
+  if (!hasSize()) return;
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight, false);
   composer.setSize(innerWidth, innerHeight);
@@ -948,6 +954,13 @@ function frame(now) {
   view.offY += (view.offYTarget - view.offY) * 0.06;
   applyViewOffset();
   if (flight) stepFlight(now); else controls.update();
+  if (!isFinite(camera.position.x + camera.position.y + camera.position.z)) {
+    // self-heal: recover a valid view instead of rendering nothing forever
+    flight = null;
+    const g = state.T?.geo;
+    camera.position.copy(g ? ll2v(g.lat, g.lon, focusDistance()) : ll2v(20, 0, idleDistance()));
+    camera.lookAt(0, 0, 0);
+  }
   const sat = orbit.getObjectByName('sat'); const t = uTime.value * .25;
   sat.position.set(Math.cos(t) * 1.5, 0, Math.sin(t) * 1.5);
   // crossfade between the dot matrix and the satellite globe
