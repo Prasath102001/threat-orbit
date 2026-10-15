@@ -235,14 +235,15 @@
     padding: 11px 18px; border-radius: 14px; background: var(--glass-2); border: 1px solid rgba(255,90,78,.5); color: #ffd3cf; font-size: 13px; max-width: calc(100% - 32px); backdrop-filter: blur(14px); }
   .toast.on { opacity: 1; transform: translate(-50%, 0); }
   .mode .sep { width: 1px; margin: 6px 2px; background: var(--hair-2); }
-  .mode .snd[aria-pressed="true"] { color: var(--coral); }
   .mode .snd .x, .mode .snd[aria-pressed="false"] .wave { display: none; }
   .mode .snd[aria-pressed="false"] .x { display: inline; }
-  .fah { position: fixed; left: 50%; top: 50%; z-index: 35; transform: translate(-50%, -50%) scale(.6); opacity: 0; pointer-events: none; cursor: pointer;
-    transition: opacity .2s, transform .35s cubic-bezier(.3, 1.6, .5, 1); padding: 6px; border-radius: 18px; background: var(--glass-2); border: 1px solid rgba(255,69,58,.6); box-shadow: 0 0 60px rgba(255,69,58,.35); }
-  .fah.on { opacity: 1; transform: translate(-50%, -50%) scale(1); pointer-events: auto; }
-  .fah img { display: block; width: min(360px, 70vw); height: auto; border-radius: 13px; }
-  @media (prefers-reduced-motion: reduce) { .fah { transition: opacity .2s; transform: translate(-50%, -50%); } }
+  .fah { position: fixed; left: 24px; bottom: 28px; z-index: 13; opacity: 0; transform: translateY(8px); pointer-events: none; cursor: pointer;
+    transition: opacity .6s var(--ease), transform .6s var(--ease); padding: 4px; border-radius: 14px; background: var(--glass-2); border: 1px solid var(--hair-2);
+    box-shadow: 0 12px 30px -12px rgba(0,0,0,.6); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+  .fah.on { opacity: .92; transform: none; pointer-events: auto; }
+  .fah img { display: block; width: 200px; height: auto; border-radius: 10px; }
+  @media (max-width: 860px) { .fah { left: 16px; bottom: auto; top: 112px; } .fah img { width: 140px; } }
+  @media (prefers-reduced-motion: reduce) { .fah { transform: none; } }
   .flash { position: fixed; inset: 0; z-index: 19; pointer-events: none; opacity: 0; background: radial-gradient(circle at 50% 50%, rgba(180,155,255,.55), rgba(61,242,224,.15) 40%, transparent 70%); }
   .flash.go { animation: flash 1.1s var(--ease); }
   @keyframes flash { 0% { opacity: 0; } 35% { opacity: 1; } 100% { opacity: 0; } }
@@ -1232,6 +1233,7 @@ const FAH_KEY = 'threat-orbit-fah';
 const FAH_GIFS = 7; // fahhh/1.gif … fahhh/7.gif
 const fah = { on: true, played: 0, timer: 0, audio: new Audio('fahhh/fahhh.mp3'), gif: null, last: 0 };
 fah.audio.preload = 'auto';
+fah.audio.volume = 0.45; // a nudge, not a jump scare
 try { fah.on = localStorage.getItem(FAH_KEY) !== 'off'; } catch {}
 function fahNext() { // preload one random GIF (never the same twice in a row) so it's ready the instant the sound starts
   let n; do n = 1 + Math.floor(Math.random() * FAH_GIFS); while (n === fah.last);
@@ -1253,7 +1255,7 @@ function fahhh(id) {
   if (!fah.on || fah.played === id) return;
   fah.played = id;
   fah.audio.currentTime = 0;
-  fah.audio.play().then(() => fahShow((fah.audio.duration || 2.5) * 1000 + 300)).catch(() => fahShow(2500));
+  fah.audio.play().then(() => fahShow((fah.audio.duration || 2.5) * 1000 + 900)).catch(() => fahShow(3000));
 }
 function setFah(on) {
   fah.on = on;
