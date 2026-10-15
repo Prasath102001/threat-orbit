@@ -234,6 +234,15 @@
   .toast { position: fixed; left: 50%; top: 84px; z-index: 30; transform: translate(-50%, -8px); opacity: 0; pointer-events: none; transition: opacity .3s, transform .3s var(--ease);
     padding: 11px 18px; border-radius: 14px; background: var(--glass-2); border: 1px solid rgba(255,90,78,.5); color: #ffd3cf; font-size: 13px; max-width: calc(100% - 32px); backdrop-filter: blur(14px); }
   .toast.on { opacity: 1; transform: translate(-50%, 0); }
+  .mode .sep { width: 1px; margin: 6px 2px; background: var(--hair-2); }
+  .mode .snd[aria-pressed="true"] { color: var(--coral); }
+  .mode .snd .x, .mode .snd[aria-pressed="false"] .wave { display: none; }
+  .mode .snd[aria-pressed="false"] .x { display: inline; }
+  .fah { position: fixed; left: 50%; top: 50%; z-index: 35; transform: translate(-50%, -50%) scale(.6); opacity: 0; pointer-events: none; cursor: pointer;
+    transition: opacity .2s, transform .35s cubic-bezier(.3, 1.6, .5, 1); padding: 6px; border-radius: 18px; background: var(--glass-2); border: 1px solid rgba(255,69,58,.6); box-shadow: 0 0 60px rgba(255,69,58,.35); }
+  .fah.on { opacity: 1; transform: translate(-50%, -50%) scale(1); pointer-events: auto; }
+  .fah img { display: block; width: min(360px, 70vw); height: auto; border-radius: 13px; }
+  @media (prefers-reduced-motion: reduce) { .fah { transition: opacity .2s; transform: translate(-50%, -50%); } }
   .flash { position: fixed; inset: 0; z-index: 19; pointer-events: none; opacity: 0; background: radial-gradient(circle at 50% 50%, rgba(180,155,255,.55), rgba(61,242,224,.15) 40%, transparent 70%); }
   .flash.go { animation: flash 1.1s var(--ease); }
   @keyframes flash { 0% { opacity: 0; } 35% { opacity: 1; } 100% { opacity: 0; } }
@@ -450,7 +459,12 @@
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="6" cy="6" r="1.6"/><circle cx="12" cy="6" r="1.6"/><circle cx="18" cy="6" r="1.6"/><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/><circle cx="6" cy="18" r="1.6"/><circle cx="12" cy="18" r="1.6"/><circle cx="18" cy="18" r="1.6"/></svg>Dots</button>
   <button type="button" data-mode="sat" title="Satellite imagery (S)">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m13 7-4-4-4 4 4 4"/><path d="m17 11 4 4-4 4-4-4"/><path d="m8 12 4 4 6-6-4-4Z"/><path d="M9 21a6 6 0 0 0-6-6"/></svg>Satellite</button>
+  <i class="sep" aria-hidden="true"></i>
+  <button type="button" id="fahBtn" class="snd" aria-pressed="true" aria-label="FAHHH alert sound">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path class="wave" d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/><path class="x" d="m16 9 6 6m0-6-6 6"/></svg>FAHHH</button>
 </div>
+
+<div class="fah" id="fah" title="Click to dismiss"><img alt="FAHHH reaction GIF for a high-risk IP"></div>
 
 <script type="module">
 import * as THREE from 'three';
@@ -1210,7 +1224,47 @@ function renderRisk(T) {
   }, REDUCED ? 0 : 40 * i));
   $('cRisk').innerHTML = `<span style="color:${R.word[1]}">${R.word[0]}</span> <span style="color:var(--faint);font-family:var(--mono);font-size:10px">${R.score}/100</span>`;
   $('cChips').innerHTML = R.flags.length ? R.flags.map(([t, c]) => `<span class="chip ${c}">${esc(t)}</span>`).join('') : '<span class="chip ion">No risk signals</span>';
+  if (R.score >= 70) fahhh(state.id);
 }
+
+/* FAHHH: sound + GIF the first time a lookup turns High risk. Missing files are skipped quietly. */
+const FAH_KEY = 'threat-orbit-fah';
+const FAH_GIFS = 7; // fahhh/1.gif … fahhh/7.gif
+const fah = { on: true, played: 0, timer: 0, audio: new Audio('fahhh/fahhh.mp3'), gif: null, last: 0 };
+fah.audio.preload = 'auto';
+try { fah.on = localStorage.getItem(FAH_KEY) !== 'off'; } catch {}
+function fahNext() { // preload one random GIF (never the same twice in a row) so it's ready the instant the sound starts
+  let n; do n = 1 + Math.floor(Math.random() * FAH_GIFS); while (n === fah.last);
+  fah.last = n; fah.gif = null;
+  fetch(`fahhh/${n}.gif`).then(r => r.ok ? r.blob() : null).then(b => { if (fah.last === n) fah.gif = b; }).catch(() => {});
+}
+fahNext();
+function fahHide() { clearTimeout(fah.timer); $('fah').classList.remove('on'); }
+function fahShow(ms) {
+  if (!fah.gif) return;
+  const img = $('fah').querySelector('img');
+  URL.revokeObjectURL(img.src);
+  img.src = URL.createObjectURL(fah.gif); // a fresh URL restarts the GIF from frame one
+  $('fah').classList.add('on');
+  clearTimeout(fah.timer); fah.timer = setTimeout(fahHide, ms);
+  fahNext();
+}
+function fahhh(id) {
+  if (!fah.on || fah.played === id) return;
+  fah.played = id;
+  fah.audio.currentTime = 0;
+  fah.audio.play().then(() => fahShow((fah.audio.duration || 2.5) * 1000 + 300)).catch(() => fahShow(2500));
+}
+function setFah(on) {
+  fah.on = on;
+  $('fahBtn').setAttribute('aria-pressed', on);
+  $('fahBtn').title = on ? 'FAHHH alert on (M to mute)' : 'FAHHH alert muted (M to unmute)';
+  try { localStorage.setItem(FAH_KEY, on ? 'on' : 'off'); } catch {}
+  if (!on) { fah.audio.pause(); fahHide(); }
+}
+$('fahBtn').addEventListener('click', () => setFah(!fah.on));
+$('fah').addEventListener('click', () => { fah.audio.pause(); fahHide(); });
+setFah(fah.on);
 const row = (k, v) => v === undefined || v === null || v === '' ? '' : `<dt>${esc(k)}</dt><dd>${v}</dd>`;
 const pending = '<span class="shimmer"></span>';
 function renderMore(T) {
@@ -1599,6 +1653,7 @@ buildLines();
 try { if (localStorage.getItem(MODE_KEY) === 'sat') setMode(true, false); } catch {}
 addEventListener('keydown', e => {
   if ((e.key === 's' || e.key === 'S') && document.activeElement !== input && !e.metaKey && !e.ctrlKey) setMode(!view.sat);
+  if ((e.key === 'm' || e.key === 'M') && document.activeElement !== input && !e.metaKey && !e.ctrlKey) setFah(!fah.on);
 });
 
 const deep = new URLSearchParams(location.search).get('ip');
