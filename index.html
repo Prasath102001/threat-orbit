@@ -6,6 +6,14 @@
 <title>Threat Orbit</title>
 <meta name="description" content="Trace any IP address or domain to where it lives: a cinematic globe with real BGP routes, multi-source geolocation consensus, risk signals and a 3D ground view.">
 <meta name="theme-color" content="#05040b">
+<!-- Google Analytics (GA4). The traced IP/domain is never sent: page_location is the bare URL. -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-0Y2EQHBZQ2"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-0Y2EQHBZQ2', { page_location: location.origin + location.pathname, page_title: 'Threat Orbit' });
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://unpkg.com" crossorigin>
@@ -469,6 +477,7 @@
 
 <script type="module">
 import * as THREE from 'three';
+const track = (name, params) => { try { window.gtag?.('event', name, params); } catch {} };
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -1194,9 +1203,9 @@ function renderCard(T) {
   const tz = T.tz;
   const t = () => { try { $('cTime').textContent = new Date().toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit' }); } catch { $('cTime').textContent = '—'; } };
   t(); renderSun(T); state.clockTimer = setInterval(() => { t(); renderSun(T); }, 15000);
-  $('aDescend').onclick = () => descend();
-  $('aShare').onclick = () => { navigator.clipboard?.writeText(location.href).then(() => toast('Link copied — anyone can open this trace.', true)); };
-  $('aCopy').onclick = () => { navigator.clipboard?.writeText(report(T)).then(() => toast('Report copied as Markdown.', true)); };
+  $('aDescend').onclick = () => { track('ground_view'); descend(); };
+  $('aShare').onclick = () => { track('share'); navigator.clipboard?.writeText(location.href).then(() => toast('Link copied — anyone can open this trace.', true)); };
+  $('aCopy').onclick = () => { track('copy_report'); navigator.clipboard?.writeText(report(T)).then(() => toast('Report copied as Markdown.', true)); };
   renderMore(T);
   card.classList.remove('on'); void card.offsetWidth; card.classList.add('on');
 }
@@ -1264,7 +1273,7 @@ function setFah(on) {
   try { localStorage.setItem(FAH_KEY, on ? 'on' : 'off'); } catch {}
   if (!on) { fah.audio.pause(); fahHide(); }
 }
-$('fahBtn').addEventListener('click', () => setFah(!fah.on));
+$('fahBtn').addEventListener('click', () => { setFah(!fah.on); track('fahhh_toggle', { on: fah.on }); });
 $('fah').addEventListener('click', () => { fah.audio.pause(); fahHide(); });
 setFah(fah.on);
 const row = (k, v) => v === undefined || v === null || v === '' ? '' : `<dt>${esc(k)}</dt><dd>${v}</dd>`;
@@ -1360,8 +1369,13 @@ async function trace(raw) {
     cinematic(T);
     const u = new URL(location.href); u.searchParams.set('ip', T.query); history.replaceState(null, '', u);
     enrich(T, id);
+    track('trace', { query_type: !query ? 'self' : IPV4.test(query) ? 'ipv4' : isIPv6(query) ? 'ipv6' : 'domain',
+      country: T.geo.cc || 'unknown', elapsed_s: +T.elapsed });
   } catch (e) {
     toast(e.message || 'Trace failed.'); tick(e.message || 'Trace failed.', true);
+    const m = e.message || '';  // a category only: the message itself can contain the address
+    track('trace_error', { reason: /isn't an IP/.test(m) ? 'invalid_input' : /private or reserved/.test(m) ? 'private_ip'
+      : /None of the geolocation/.test(m) ? 'geo_failed' : /resolv|DNS/i.test(m) ? 'dns_failed' : 'other' });
   } finally { setBusy(false); }
 }
 async function resolveDomain(name) {
@@ -1452,6 +1466,8 @@ async function enrich(T, id) {
   // heuristic: big content/transit networks serving DNS from many sites are almost always anycast
   T.anycast = T.pdb?.fac_count > 40 && /content|nsp/i.test(T.pdb?.info_type || '') && (T.idb?.ports || []).includes(53);
   upd();
+  { const R = riskOf(T);  // once per trace, after every risk source has answered
+    track('risk_result', { risk_band: R.score >= 70 ? 'high' : R.score >= 40 ? 'elevated' : 'low', risk_score: R.score, anycast: T.anycast }); }
   tick(`Trace complete · ${[T.geo.city, T.geo.country].filter(Boolean).join(', ')} · drag the globe, or Descend for street level`);
 }
 
@@ -1577,7 +1593,7 @@ async function setMode(sat, save = true) {
     $('modeSwitch').classList.remove('loading');
   }
 }
-$('modeSwitch').addEventListener('click', e => { const b = e.target.closest('button[data-mode]'); if (b) setMode(b.dataset.mode === 'sat'); });
+$('modeSwitch').addEventListener('click', e => { const b = e.target.closest('button[data-mode]'); if (b) { setMode(b.dataset.mode === 'sat'); track('map_mode', { mode: b.dataset.mode }); } });
 
 function startOrbit() {
   if (REDUCED) return;
